@@ -8,24 +8,27 @@
 </head>
 <body>
 
-<!-- Aquí puedes incluir el contenido de la página de inicio -->
+<!-- Encabezado de la página de inicio -->
 <header>
-    <!-- Encabezado de la página de inicio -->
     <h1>Bienvenido a Galio</h1>
 </header>
 
 <!-- Contenido de la página de inicio -->
 <main>
-    <!-- Aquí va el contenido principal de la página de inicio -->
-    <p>Aquí aparecerá el ejercicio del día.</p>
+    <p>Bienvenido, {{ user.username }}!</p>
+    <p>Usuario ID: {{ user.id }}</p>
+
+    {% if id_pregunta %}
+    <p>Pregunta del día:</p>
+    <p>ID de la pregunta: {{ id_pregunta }}</p>
+    <p>Enunciado: {{ enunciado }}</p>
+    {% endif %}
 </main>
 
 <!-- Pie de página de la página de inicio -->
 <footer>
-    <p>Aquí aparecerá la respuesta corta del día anterior.</p>
+    <!-- Aquí puedes incluir cualquier otro contenido adicional que desees mostrar -->
 </footer>
-
-<!-- Aquí puedes incluir cualquier otro contenido adicional que desees mostrar -->
 
 </body>
 </html>
