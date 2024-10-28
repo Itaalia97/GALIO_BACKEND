@@ -1,0 +1,7 @@
+﻿[
+{
+    "model": "api.ejercicio",
+    "pk": 1,
+    "fields": {
+        "numero_pregunta": 1,
+        "pregunta": 

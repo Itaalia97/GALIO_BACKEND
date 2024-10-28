@@ -1,0 +1,20 @@
+<!-- restablecer_contrasena.html -->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Restablecer Contraseña</title>
+</head>
+<body>
+    <h2>Restablecer Contraseña</h2>
+    <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="uidb64" value="{{ uidb64 }}">
+        <input type="hidden" name="token" value="{{ token }}">
+        <label for="new_password">Nueva Contraseña:</label>
+        <input type="password" name="new_password" required id="new_password">
+        <button type="submit">Restablecer Contraseña</button>
+    </form>
+</body>
+</html>
