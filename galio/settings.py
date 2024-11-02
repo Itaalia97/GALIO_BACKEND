@@ -5,18 +5,17 @@ from decouple import config
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+SECRET_KEY = config('DJANGO_SECRET_KEY', default='clave-secreta-de-desarrollo')
+DEBUG = config('DEBUG', default=False, cast=bool)  # True o False, según el entorno
+
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='').split(',')
+
+# Archivos estáticos y media
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
-
-DEBUG = True  # Asegúrate de cambiar a False en producción
-
-if DEBUG:
-    STATIC_URL = '/static/'
-    STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
-    MEDIA_URL = '/media/'
-    MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
-
-ALLOWED_HOSTS = ['0.0.0.0', '192.168.1.72', 'localhost', '127.0.0.1']
+STATIC_URL = '/static/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')] if DEBUG else []
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -43,10 +42,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-CORS_ALLOWED_ORIGINS = [
-    "http://192.168.1.73:8000",
-    "http://localhost:8000",
-]
+CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='').split(',')
 
 ROOT_URLCONF = 'galio.urls'
 
@@ -69,19 +65,16 @@ TEMPLATES = [
 WSGI_APPLICATION = 'galio.wsgi.application'
 
 # Configuración de base de datos
-
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'galio_db',  # La nueva base de datos
-        'USER': 'italia',    # El usuario creado
-        'PASSWORD': 'ItaSuperUser',  # La nueva contraseña
-        'HOST': 'localhost',
-        'PORT': '5432',
+        'NAME': config('DB_NAME'),
+        'USER': config('DB_USER'),
+        'PASSWORD': config('DB_PASSWORD'),
+        'HOST': config('DB_HOST', default='localhost'),
+        'PORT': config('DB_PORT', default='5432'),
     }
 }
-
-
 
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
@@ -91,17 +84,9 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 LANGUAGE_CODE = 'en-us'
-
 TIME_ZONE = 'UTC'
-
 USE_I18N = True
-
 USE_TZ = True
-
-# # Archivos estáticos
-# STATIC_URL = '/static/'
-# STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
-# STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
@@ -116,8 +101,6 @@ REST_FRAMEWORK = {
         'rest_framework.renderers.JSONRenderer',
     ],
 }
-
-SECRET_KEY = config('DJANGO_SECRET_KEY', default='clave-secreta-de-desarrollo')
 
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=5),
@@ -142,8 +125,15 @@ EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 
-EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='italia.ibinarriaga@gmail.com')
-EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='contraseña_de_gmail')
-
+EMAIL_HOST_USER = config('EMAIL_HOST_USER')
+EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD')
 DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
 
+# Archivos estáticos y media en producción
+if not DEBUG:
+    STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+    MEDIA_URL = '/media/'
+    MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+    # Configuración para servir archivos estáticos en Railway (si es necesario)
+    STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.ManifestStaticFilesStorage'
