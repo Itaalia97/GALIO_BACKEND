@@ -23,3 +23,5 @@ class RespuestaUsuario(models.Model):
 
     def __str__(self):
         return f"Respuesta de {self.usuario.username} a '{self.respuesta_usuario[:50]}...'"
+
+
