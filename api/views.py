@@ -58,21 +58,29 @@ class RecuperarContrasena(View):
 class RestablecerContrasena(View):
     def get(self, request, uidb64, token):
         return render(request, 'restablecer_contrasena.html', {'uidb64': uidb64, 'token': token})
+
     def post(self, request, uidb64, token):
         try:
             uid = force_str(urlsafe_base64_decode(uidb64))
             user = get_user_model().objects.get(pk=uid)
         except (TypeError, ValueError, OverflowError, User.DoesNotExist):
             user = None
+
         if user is not None and default_token_generator.check_token(user, token):
             new_password = request.POST.get('new_password')
             user.set_password(new_password)
             user.save()
-            return JsonResponse({'message': 'Contraseña restablecida exitosamente.'}, status=200)
+
+            return JsonResponse({
+                'message': 'Contraseña restablecida exitosamente.',
+                'note': (
+                    f"Tu nombre de usuario es: **{user.username}**.\n"
+                    "Asegúrate de recordarlo, junto con tu nueva contraseña, "
+                    "ya que lo necesitarás para iniciar sesión."
+                )
+            }, status=200)
         else:
             return JsonResponse({'error': 'Token inválido o expirado.'}, status=400)
-
-
 
 
 def home(request):
@@ -361,42 +369,53 @@ from rest_framework.permissions import IsAuthenticated
 
 class LeaderboardView(APIView):
     permission_classes = [IsAuthenticated]
+
     def get(self, request):
         # Obtener las respuestas agrupadas por usuario
         respuestas_agrupadas = RespuestaUsuario.objects.values('usuario').annotate(total_respuestas=Count('id'))
+
         # Calcular la racha para cada usuario
         rachas = []
         for user_data in respuestas_agrupadas:
             user = User.objects.get(id=user_data['usuario'])
             racha = calcular_racha_respuestas(user)
             rachas.append((user, racha, user_data['total_respuestas']))
+
+        # Para la parte de racha, solo incluir usuarios con racha >= 2
+        rachas_filtradas = [r for r in rachas if r[1] >= 2]
+
         # Ordenar por racha y seleccionar los primeros 20
-        top_20_racha = sorted(rachas, key=lambda x: x[1], reverse=True)[:20]
+        top_20_racha = sorted(rachas_filtradas, key=lambda x: x[1], reverse=True)[:20]
+
         # Ordenar por cantidad de respuestas totales y seleccionar los primeros 20
         top_20_totales = sorted(rachas, key=lambda x: x[2], reverse=True)[:20]
-        # Encontrar la posición del usuario logeado en ambas listas
+
+        # Encontrar la posición del usuario logueado en ambas listas
         usuario_logeado = request.user
         posicion_racha = next((i for i, r in enumerate(top_20_racha) if r[0] == usuario_logeado), None)
         posicion_totales = next((i for i, r in enumerate(top_20_totales) if r[0] == usuario_logeado), None)
+
         # Construir la respuesta JSON ajustada
         respuesta = {
             'top_20_racha': [{
-                    'posicion': i + 1,  # Posición basada en el índice (empezando desde 1)
-                    'usuario': r[0].username,
-                    'racha': r[1]
-                } for i, r in enumerate(top_20_racha)],
+                'posicion': i + 1,  # Posición basada en el índice (empezando desde 1)
+                'usuario': r[0].username,
+                'racha': r[1]
+            } for i, r in enumerate(top_20_racha)],
             'usuario_logeado_racha': {
                 'posicion': posicion_racha + 1 if posicion_racha is not None else None,
                 'usuario': usuario_logeado.username,
-                'racha': calcular_racha_respuestas(usuario_logeado)},
+                'racha': calcular_racha_respuestas(usuario_logeado)
+            },
             'top_20_totales': [{
-                    'posicion': i + 1,  # Posición basada en el índice (empezando desde 1)
-                    'usuario': r[0].username,
-                    'total_ejercicios': r[2]
-                } for i, r in enumerate(top_20_totales)],
+                'posicion': i + 1,  # Posición basada en el índice (empezando desde 1)
+                'usuario': r[0].username,
+                'total_ejercicios': r[2]
+            } for i, r in enumerate(top_20_totales)],
             'usuario_logeado_totales': {
                 'posicion': posicion_totales + 1 if posicion_totales is not None else None,
                 'usuario': usuario_logeado.username,
-                'total_ejercicios': RespuestaUsuario.objects.filter(usuario=usuario_logeado).count()}}
-        return Response(respuesta, status=status.HTTP_200_OK)
-
+                'total_ejercicios': RespuestaUsuario.objects.filter(usuario=usuario_logeado).count()
+            }
+        }
+        return Response(respuesta, status=200)
