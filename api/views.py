@@ -337,85 +337,105 @@ def login_user(request):
     else:
         return render(request, 'login.html')
 
+
 from django.db.models import Count
 from django.utils import timezone
 from datetime import timedelta
-
-def calcular_racha_respuestas(usuario):
-    respuestas = RespuestaUsuario.objects.filter(usuario=usuario).order_by('-fecha_envio')
-    if not respuestas:
-        return 0
-
-        # Verificar si la última respuesta es reciente (ayer u hoy)
-        ultima_respuesta = respuestas.first().fecha_envio
-        hoy = timezone.now().date()
-        if ultima_respuesta < hoy - timedelta(days=1):
-            return 0  # Si la última respuesta no es reciente, la racha es 0
-
-    racha = 1
-    for i in range(1, len(respuestas)):
-        if respuestas[i-1].fecha_envio - respuestas[i].fecha_envio == timedelta(days=1):
-            racha += 1
-        else:
-            break  # Si hubo un día de diferencia mayor, la racha se rompe
-    return racha
-
-
-from django.db.models import Count
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from .models import RespuestaUsuario, User
 
 
+# Función para calcular la racha correctamente
+def calcular_racha_respuestas(usuario):
+    respuestas = RespuestaUsuario.objects.filter(usuario=usuario).order_by('-fecha_envio')
+
+    if not respuestas:
+        return 0
+
+    racha = 1
+    hoy = timezone.now().date()
+
+    # Si la última respuesta no es de hoy o del último día hábil, racha se resetea a 0
+    if respuestas[0].fecha_envio < obtener_ultimo_dia_habil():
+        return 0
+
+    for i in range(1, len(respuestas)):
+        dia_actual = respuestas[i - 1].fecha_envio
+        dia_anterior = respuestas[i].fecha_envio
+
+        # Solo contar días hábiles (lunes a viernes)
+        if dia_actual - timedelta(days=1) != dia_anterior and not es_fin_de_semana(dia_actual - timedelta(days=1)):
+            break  # Se interrumpió la racha
+        racha += 1
+
+    return racha
+
+
+# Función para obtener el último día hábil (excluyendo fines de semana)
+def obtener_ultimo_dia_habil():
+    hoy = timezone.now().date()
+    if hoy.weekday() == 0:  # Si es lunes, el último hábil fue el viernes
+        return hoy - timedelta(days=3)
+    elif hoy.weekday() in [6]:  # Si es domingo, el último hábil fue el viernes
+        return hoy - timedelta(days=2)
+    else:
+        return hoy - timedelta(days=1)  # Si es otro día, el anterior fue el último hábil
+
+
+# Función para saber si una fecha es fin de semana
+def es_fin_de_semana(fecha):
+    return fecha.weekday() in [5, 6]  # 5 = Sábado, 6 = Domingo
+
+
+# Vista del tablero de posiciones
 class LeaderboardView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        # Obtener las respuestas agrupadas por usuario
         respuestas_agrupadas = RespuestaUsuario.objects.values('usuario').annotate(total_respuestas=Count('id'))
 
-        # Calcular la racha para cada usuario
+        # Lista de usuarios con rachas activas
         rachas = []
         for user_data in respuestas_agrupadas:
             user = User.objects.get(id=user_data['usuario'])
             racha = calcular_racha_respuestas(user)
-            rachas.append((user, racha, user_data['total_respuestas']))
 
-        # Para la parte de racha, solo incluir usuarios con racha >= 2
-        rachas_filtradas = [r for r in rachas if r[1] >= 2]
+            # 🔹 Solo agregar usuarios con una racha mayor a 0
+            if racha > 0:
+                rachas.append((user, racha, user_data['total_respuestas']))
 
-        # Ordenar por racha y seleccionar los primeros 20
-        top_20_racha = sorted(rachas_filtradas, key=lambda x: x[1], reverse=True)[:20]
-
-        # Ordenar por cantidad de respuestas totales y seleccionar los primeros 20
+        # Ordenar por racha descendente y seleccionar los primeros 20
+        top_20_racha = sorted(rachas, key=lambda x: x[1], reverse=True)[:20]
+        # Ordenar por total de respuestas enviadas y seleccionar los primeros 20
         top_20_totales = sorted(rachas, key=lambda x: x[2], reverse=True)[:20]
 
-        # Encontrar la posición del usuario logueado en ambas listas
+        # Encontrar la posición del usuario logueado
         usuario_logeado = request.user
         posicion_racha = next((i for i, r in enumerate(top_20_racha) if r[0] == usuario_logeado), None)
         posicion_totales = next((i for i, r in enumerate(top_20_totales) if r[0] == usuario_logeado), None)
 
         # Construir la respuesta JSON ajustada
         respuesta = {
-            'top_20_racha': [{
-                'posicion': i + 1,  # Posición basada en el índice (empezando desde 1)
-                'usuario': r[0].username,
-                'racha': r[1]
-            } for i, r in enumerate(top_20_racha)],
+            'top_20_racha': [
+                {'posicion': i + 1, 'usuario': r[0].username, 'racha': r[1]}
+                for i, r in enumerate(top_20_racha)
+            ],
             'usuario_logeado_racha': {
                 'posicion': posicion_racha + 1 if posicion_racha is not None else None,
                 'usuario': usuario_logeado.username,
                 'racha': calcular_racha_respuestas(usuario_logeado)
             },
-            'top_20_totales': [{
-                'posicion': i + 1,  # Posición basada en el índice (empezando desde 1)
-                'usuario': r[0].username,
-                'total_ejercicios': r[2]
-            } for i, r in enumerate(top_20_totales)],
+            'top_20_totales': [
+                {'posicion': i + 1, 'usuario': r[0].username, 'total_ejercicios': r[2]}
+                for i, r in enumerate(top_20_totales)
+            ],
             'usuario_logeado_totales': {
                 'posicion': posicion_totales + 1 if posicion_totales is not None else None,
                 'usuario': usuario_logeado.username,
                 'total_ejercicios': RespuestaUsuario.objects.filter(usuario=usuario_logeado).count()
             }
         }
+
         return Response(respuesta, status=200)
